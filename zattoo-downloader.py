@@ -44,21 +44,15 @@ class Zattoo:
 
     def checkFFmpeg(self):
         dest = os.path.abspath("ffmpeg")
-        destProbe = os.path.abspath("ffprobe")
         current_os = platform.system().lower()
 
         try:
             if current_os == 'darwin':
                 ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
-                ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
                 if not ffmpeg_path:
                     subprocess.check_call(['brew', 'install', 'ffmpeg'])
                     ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
-
-                if not ffprobe_path:
-                    subprocess.check_call(['brew', 'install', 'ffprobe'])
-                    ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
             elif current_os == 'linux':
                 ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
@@ -73,31 +67,13 @@ class Zattoo:
                     elif os.path.exists('/etc/pacman.conf'):
                         subprocess.check_call(['sudo', 'pacman', '-S', '--noconfirm', 'ffmpeg'])
                     ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
-                
-                ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
-                if not ffprobe_path:
-                    if os.path.exists('/etc/apt/'):
-                        subprocess.check_call(['sudo', 'apt', 'update'])
-                        subprocess.check_call(['sudo', 'apt', 'install', '-y', 'ffprobe'])
-                    elif os.path.exists('/etc/yum/'):
-                        subprocess.check_call(['sudo', 'yum', 'install', '-y', 'ffprobe'])
-                    elif os.path.exists('/etc/dnf/'):
-                        subprocess.check_call(['sudo', 'dnf', 'install', '-y', 'ffprobe'])
-                    elif os.path.exists('/etc/pacman.conf'):
-                        subprocess.check_call(['sudo', 'pacman', '-S', '--noconfirm', 'ffprobe'])
-                    ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
             if ffmpeg_path:
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.copy(ffmpeg_path, dest)
             else:
                 print("FFmpeg installation failed.")
-            
-            if ffprobe_path:
-                os.makedirs(os.path.dirname(destProbe), exist_ok=True)
-                shutil.copy(ffprobe_path, destProbe)
-            else:
-                print("FFprobe installation failed.")
+
         except Exception as e:
             print(f"Error: {e}")
 
