@@ -519,7 +519,6 @@ if __name__ == "__main__":
                         
     session_info = zattoo.getSessionInfo()
     print("Gathering Information, Please Wait!")
-    time.sleep(2)
     recordings = zattoo.get_allrecordings(session_info.get("power_guide_hash"))
     srResult = zattoo.selectRecording(recordings)
     while srResult == -1:
