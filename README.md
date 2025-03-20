@@ -1,3 +1,6 @@
+# Usage
+zattoo-downloader.py --Email yourzattooemail --Password yourzattoopassword
+
 # Alpha Version
 This project has been tested on macOS (M1) and Windows 10. I can't guarantee 100% functionality, so this project will remain in the alpha stage for a short time.
 
