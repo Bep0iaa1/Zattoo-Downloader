@@ -1,6 +1,6 @@
 # Since this is in alpha, please report any bug or suggestions to improve this application
-#
-# Version a1.0
+# Credits: krasny013, sunsettrack4
+# Version 2.0a
 
 import os
 import subprocess
@@ -43,19 +43,26 @@ class Zattoo:
         })
 
     def checkFFmpeg(self):
+        if os.path.exists("ffmpeg") == False:
+            os.mkdir("ffmpeg")
+
         dest = os.path.abspath("ffmpeg")
         current_os = platform.system().lower()
 
         try:
             if current_os == 'darwin':
                 ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
+                ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
                 if not ffmpeg_path:
                     subprocess.check_call(['brew', 'install', 'ffmpeg'])
                     ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
+                    ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
             elif current_os == 'linux':
                 ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
+                ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
+
                 if not ffmpeg_path:
                     if os.path.exists('/etc/apt/'):
                         subprocess.check_call(['sudo', 'apt', 'update'])
@@ -67,10 +74,12 @@ class Zattoo:
                     elif os.path.exists('/etc/pacman.conf'):
                         subprocess.check_call(['sudo', 'pacman', '-S', '--noconfirm', 'ffmpeg'])
                     ffmpeg_path = subprocess.check_output(['which', 'ffmpeg']).decode('utf-8').strip()
+                    ffprobe_path = subprocess.check_output(['which', 'ffprobe']).decode('utf-8').strip()
 
             if ffmpeg_path:
-                os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.copy(ffmpeg_path, dest)
+                shutil.copy(ffprobe_path, dest)
+
             else:
                 print("FFmpeg installation failed.")
 
@@ -198,6 +207,27 @@ class Zattoo:
             for rec in recordings_page:
                 teasable_id = rec.get("teasable_id")
                 if teasable_id in library_program_map:
+                    channel_name = rec.get("teasable", {}).get("channel_name")
+
+                    serie_no=rec.get("teasable", {}).get("s_no")
+                    if serie_no == None or serie_no == 0:
+                        serie_no = ""
+                    else:
+                        serie_no = f"S{serie_no:02d}"
+
+                    episode_no = rec.get("teasable", {}).get("e_no")
+                    if episode_no == None or episode_no == 0:
+                        episode_no = ""
+                    else:
+                        episode_no = f"E{episode_no:02d}"
+
+                    episode = rec.get("text") or ""
+                    year=rec.get("teasable", {}).get("year")
+                    country=rec.get("teasable", {}).get("country")
+                    classif=rec.get("teasable", {}).get("c") or ""
+                    genre=rec.get("teasable", {}).get("g") or ""
+                    picture_url=rec.get("teasable", {}).get("i_url")
+
                     for library_id in library_program_map[teasable_id]:
                         recordingIndex += 1
                         matching_recordings.append({
@@ -205,7 +235,15 @@ class Zattoo:
                             "program_id": teasable_id,
                             "library_id": library_id,
                             "title": rec.get("title"),
-                            "episode": rec.get("text")
+                            "episode": episode,
+                            "channel": channel_name,
+                            "serie": serie_no,
+                            "epis": episode_no,
+                            "year": year,
+                            "country": country,
+                            "class": classif,
+                            "genre": genre,
+                            "picture": picture_url
                         })
             return "OK"
 
@@ -227,8 +265,17 @@ class Zattoo:
         self.get_login()
         return self.session_info
     
-    def selectRecording(self, recordings):
+    def playlistSelectMenu(self):
+        print("Playlist!")
+        return 1
+    
+    def selectRecording(self, recordings, downloadProc):
         os.system('cls' if os.name == "nt" else 'clear')
+        if "ERR" in downloadProc:
+            if "0" in downloadProc:
+                print("Error: Download wasn't successful\n")
+            if "-2" in downloadProc:
+                print("Error: Requested file isn't available\n")
 
         if not recordings:
             print("No recordings available to select.")
@@ -236,25 +283,35 @@ class Zattoo:
 
         print("\nAvailable recordings:\n")
         for recording in recordings:
-            print(f"{recording['recordingIndex']}. {recording['title']} - {recording['episode']}")
+            recEpisode = ""
+            if recording['episode'] is not None and recording['episode'] != "":
+                recEpisode = f"- {recording['episode']} "
+
+            print(f"{recording['recordingIndex']}. {recording['title']} {recEpisode}({recording['channel']})")
 
         try:
-            selected_index = int(input(f"\nWhich recording do you want to download? (1-{len(recordings)}) "))
+            selected_index = int(input(f"\nWhich recording do you want to download? (1-{len(recordings)})\n"))#Press 'L' to create a downloadlist: "))
+            '''if selected_index == "L" or selected_index == "l":
+                return "L"'''
+            
             if 1 <= selected_index <= len(recordings):
                 selected_recording = recordings[selected_index - 1]
                 return selected_recording
             else:
                 print(f"Invalid input!\nPlease choose a number between 1 and {len(recordings)}.")
-                return -1
+                return -2
         except ValueError:
             print("Invalid input. Please enter a number.")
-            return -1
+            return -2
         
-    def modifyM3U8(self, input_data, channelID, firstInput, secondInput, token):
+    def modifyM3U8(self, input_data, Channel, token, low, domain):
         output = "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n"
         
         audio_pattern = re.compile(r'#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="([^"]+)",NAME="([^"]+)",DEFAULT=([^,]+),AUTOSELECT=([^,]+),LANGUAGE="([^"]+)"')
         audio_matches = audio_pattern.findall(input_data)
+
+        nd = re.search(r'nd_(\d+)', input_data)
+        frameRate = re.search(r'FRAME-RATE=(\d+)', input_data)
         
         languages = {}
         
@@ -264,19 +321,28 @@ class Zattoo:
                 languages[language] = []
             languages[language].append((name, default == "YES"))
         
-        uri = f"https://fr5-v6-5-hls7-pvr.zahs.tv/{channelID}/{firstInput}/{secondInput}"
+        #uri = f"https://{domain}-pvr.zahs.tv/{Channel}"
+        uri = f"https://fr5-v6-5-hls7-pvr.zahs.tv/{Channel}"
+
+        if low == 1:
+            res = "768x432"
+            quality = 1500
+        elif low == 0:
+            res = "1920x1080"
+            quality = 8000
         
-        output += "#EXT-X-STREAM-INF:BANDWIDTH=8000000,CODECS=\"avc1.4d401e,mp4a.40.2\",RESOLUTION=1920x1080,FRAME-RATE=50,AUDIO=\"audio\",CLOSED-CAPTIONS=NONE\n"
-        output += f"{uri}/t_track_video_bw_7800000_num_0_tid_1_nd_1600_mbr_8000.m3u8?z32={token}\n"
+        output += f"#EXT-X-STREAM-INF:BANDWIDTH={quality}000,CODECS=\"avc1.4d401e,mp4a.40.2\",RESOLUTION={res},FRAME-RATE={frameRate.group(1)},AUDIO=\"audio\",CLOSED-CAPTIONS=NONE\n"
+        output += f"{uri}/t_track_video_bw_{quality - 200}000_num_0_tid_1_nd_{nd.group(1)}_mbr_{quality}.m3u8?z32={token}\n"
         
         for language, audio_tracks in languages.items():
             for name, is_default in audio_tracks:
-                audio_uri = f"{uri}/t_track_audio_bw_128000000_num_0_tid_2_p_10_l_{language}_nd_1600_mbr_8000.m3u8?z32={token}"
+                audio_uri = f"{uri}/t_track_audio_bw_128000000_num_0_tid_2_p_10_l_{language}_nd_{nd.group(1)}_mbr_{quality}.m3u8?z32={token}"
                 output += f"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"{name}\",DEFAULT={'YES' if is_default else 'NO'},AUTOSELECT=YES,LANGUAGE=\"{language}\",URI=\"{audio_uri}\"\n"
         
         return output
     
     def get_video_infs(self, file_path):
+        global normalProc
         try:
             if os.name == "nt":
                 ffprobeExe = "ffprobe.exe"
@@ -294,9 +360,11 @@ class Zattoo:
             stdout, stderr = result.communicate()
 
             while "bit_rate=" not in stdout:
-                print(f"stdout {stdout}")
-
-            print(stdout)
+                print(f"Loading file")
+                if "duration=N/A" in stdout:
+                    time.sleep(2000)
+                    normalProc = -1 
+                    break
 
             bitrate_match = re.search(r'bit_rate=([\d.]+)', stdout)
             if bitrate_match:
@@ -322,7 +390,11 @@ class Zattoo:
                 print(f"Error extracting video info: {e}")
                 return None
     
-    def downloadSelectedRecording(self, selectedRecording):
+    def downloadSelectedRecording(self, selectedRecording, low):
+        global normalProc
+        normalProc = 0
+        episode = ""
+
         if selectedRecording:
             params = {
                 "with_schedule": False,
@@ -330,27 +402,63 @@ class Zattoo:
                 "https_watch_urls": True,
                 "sdh_subtitles": True
             }
-            print(f"Preparing download")
+            print(f"\nPreparing download")
 
             try:
-                title = f"{selectedRecording['title']} - {selectedRecording['episode']}"
                 hls7res = self.session.post(f'https://{self.domain}/zapi/watch/recording/{selectedRecording["library_id"]}', params=params)
                 res = hls7res.json()
 
+                streams = res.get("stream")
+                if not streams:
+                    print("No streams found.")
+                    return
+                
+                quality = streams.get("quality").upper()
+                if quality == "HD":
+                    low = 0
+                else:
+                    low = 1
+
+                if selectedRecording['episode'] is not None and selectedRecording['episode'] != "":
+                    episode = f"- {selectedRecording['episode']} ({selectedRecording['serie']}{selectedRecording['epis']}) "
+
+                channel = "".join(selectedRecording['channel']).replace("HD", quality)
+                title = f"{selectedRecording['recordingIndex']}. {selectedRecording['title']} {episode}[{channel}] ({selectedRecording['year']}, {selectedRecording['country']}, {''.join(selectedRecording['class']).replace(']', '')}, {''.join(selectedRecording['genre']).replace('[', '')})"
+                
+                title = title.replace('\'', "")
+                title = title.replace("?", "")
+                title = title.replace(":", "")
+                title = title.replace(">", "")
+                title = title.replace("<", "")
+                title = title.replace("|", "")
+                title = title.replace("*", "")
+                title = title.replace("/", " ")
+                title = title.replace("\\", "")
+                title = title.replace('"', "")
+                
                 tmp = os.path.abspath("tmp")
                 ffmpegDir = os.path.abspath("ffmpeg")
                 titlePath = os.path.abspath(f"{tmp}/{title}.m3u8")
                 outputPath = os.path.abspath(f"output/{title}.mp4")
+
+                if os.path.exists(outputPath):
+                    inputPath = input("File already exists! Do you still want to download it? (y/n)\n")
+                    if inputPath == "y" or inputPath == "yes":
+                        counter = 1
+                        while True:
+                            new_outputPath = os.path.abspath(f"output/{title} ({counter}).mp4")
+                            if not os.path.exists(new_outputPath):
+                                outputPath = new_outputPath
+                                break
+                            counter += 1
+                    else:
+                        return "abr"
 
                 if os.name == "nt":
                     ffmpegExe = "ffmpeg.exe"
                 else:
                     ffmpegExe = "ffmpeg"
 
-                streams = res.get("stream")
-                if not streams:
-                    print("No streams found.")
-                    return
                 watchurl = streams.get("watch_urls")
                 url_map = []
 
@@ -361,13 +469,13 @@ class Zattoo:
                     break
 
                 url_string = ''.join(url_map)
-                url_pattern = r'https://[a-zA-Z0-9\-]+-hls7-pvr\.zahs\.tv/([^/]+)/([^/]+)/([^/]+)'
+                url_pattern = r'https://(.*?)pvr\.zahs\.tv/(.*?)/m.m3u8'
                 match = re.search(url_pattern, url_string)
                 token_pattern = r'z32=([^&]+)'
 
                 getm3u8 = requests.get(url_string)
                 token_match = re.search(token_pattern, url_string)
-                finalm3u8 = self.modifyM3U8(getm3u8.text, match.group(1), match.group(2), match.group(3), token_match.group(1))
+                finalm3u8 = self.modifyM3U8(getm3u8.text, match.group(2), token_match.group(1), low, match.group(1))
 
                 if not os.path.exists("tmp"):
                     os.makedirs("tmp")
@@ -384,7 +492,7 @@ class Zattoo:
                 
                 if os.name == "nt":
                     process = subprocess.Popen(
-                        [os.path.join(ffmpegDir, ffmpegExe), "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-i", titlePath, "-c", "copy", outputPath],
+                        [os.path.join(ffmpegDir, ffmpegExe), "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-i", titlePath, "-map", "0", "-c", "copy", outputPath],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
@@ -393,7 +501,7 @@ class Zattoo:
                     )
                 else: 
                     process = subprocess.Popen(
-                        [os.path.join(ffmpegDir, ffmpegExe), "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-i", titlePath, "-c", "copy", outputPath],
+                        [os.path.join(ffmpegDir, ffmpegExe), "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-i", titlePath, "-map", "0", "-c", "copy", outputPath],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True,
@@ -401,6 +509,8 @@ class Zattoo:
                     )
 
                 def track_progress():
+                    global normalProc
+
                     hours = int(duration // 3600)
                     minutes = int((duration % 3600) // 60)
                     seconds = int(duration % 60)
@@ -412,9 +522,18 @@ class Zattoo:
 
                     while True:
                         line = process.stderr.readline()
+                        if "duration=N/A" in line:
+                            if low == 0:
+                                normalProc = -1
+                            elif low == 1:
+                                normalProc = -2
+
+                            process.terminate() 
+                            break
+                        
                         if reset == True:
                             os.system('cls' if os.name == "nt" else 'clear')
-                            print(f"\nDownloading: {selectedRecording['title']} - {selectedRecording['episode']} (ID: {selectedRecording['library_id']})\nDownload Location: {outputPath}\n")
+                            print(f"\nDownloading: {selectedRecording['recordingIndex']}. {selectedRecording['title']} - {selectedRecording['episode']} ({channel}), ID: {selectedRecording['library_id']})\nDownload Location: {outputPath}\n")
                             reset = False
                         if not line:
                             break
@@ -445,32 +564,43 @@ class Zattoo:
                                         file_size_bytes = (bitrate * 1_000_000 * duration) / 8
                                         file_size_mb = file_size_bytes / (1024 * 1024)
                                         firstSize = file_size_mb * 1000000
-
-                                        gbSize = firstSize / 1000
                                         
                                         firstSizeActive = 0
-
-                                    print(f"Progress: {progress_percentage:.2f}% ({os.path.getsize(outputPath) / 1000000:.2f} MB / {firstSize:.2f} MB (≈ {math.floor(gbSize) if gbSize - math.floor(gbSize) < 0.5 else math.ceil(gbSize)} GB) | Elapsed: {elapsed_h:02}:{elapsed_m:02}:{elapsed_s:02} | Remaining: {remaining_h:02}:{remaining_m:02}:{remaining_s:02})", end="\r")
+                                        
+                                    print(f"Progress: {progress_percentage:.2f}% ({os.path.getsize(outputPath) / (1024**2):.2f} MB / {firstSize:.2f} MB (≈ {firstSize / 1024:.1f} GB) | Elapsed: {elapsed_h:02}:{elapsed_m:02}:{elapsed_s:02} | Remaining: {remaining_h:02}:{remaining_m:02}:{remaining_s:02})", end="\r")
 
                                 except ValueError:
                                     print(f"Error converting time: {current_time}")
 
-                # start a separate thread to avoid blocking
-                progress_thread = threading.Thread(target=track_progress)
-                progress_thread.start()
+                if normalProc == 0:
+                    if low == 1:
+                        low = 0
 
-                process.wait()
-                progress_thread.join()
-                print(f"Progress: 100%   ", end="\r")
-                print("\nDownload completed.")
+                    # start a separate thread to avoid blocking
+                    progress_thread = threading.Thread(target=track_progress)
+                    progress_thread.start()
 
-                if os.name == "nt":
-                    subprocess.run(['explorer', '/select,', outputPath])
-                else:
-                    subprocess.run(['open', os.path.dirname(outputPath)])
+                    process.wait()
+                    progress_thread.join()
+
+                    print(f"Progress: 100%   ", end="\r")
+                    print("\nDownload completed.")
+
+                    if os.name == "nt":
+                        subprocess.run(['explorer', '/select,', outputPath])
+                    else:
+                        subprocess.run(['open', os.path.dirname(outputPath)])
+
+                elif normalProc == -1:
+                    low = 1
+                    self.downloadSelectedRecording(selectedRecording, 1)
+                elif normalProc == -2:
+                    print("Error: Requested file isn't available")
+                    return "ERR-2"
                 
                 os.system(f"rmdir /s /q {tmp}" if os.name == "nt" else f"rm -rf {tmp}")
 
+                return "OK"
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
 
@@ -492,12 +622,31 @@ if __name__ == "__main__":
         zattoo.checkFFmpegWindows()
     else:
         zattoo.checkFFmpeg()
+
+    tmp = os.path.abspath("tmp")
+    if os.path.exists(tmp):
+        os.system(f"rmdir /s /q {tmp}" if os.name == "nt" else f"rm -rf {tmp}")
+
+    def proc(session_info, downloadProc):
+        recordings = zattoo.get_allrecordings(session_info.get("power_guide_hash"))
+        srResult = zattoo.selectRecording(recordings, downloadProc)
+        while srResult == -2:
+            '''if srResult == "L":
+                playlistSelected = zattoo.playlistSelectMenu()
+                print(f"Selected: {playlistSelected}")
+                exit()
+                break
+            else:'''
+            srResult = zattoo.selectRecording(recordings, downloadProc)
+        
+        downloadProc = zattoo.downloadSelectedRecording(srResult, 0)
+        if downloadProc == "OK" or downloadProc == "abr":
+            proc(session_info, "OK")
+        elif "ERR" in downloadProc:
+            proc(session_info, downloadProc)
+        else:
+            exit()
                         
     session_info = zattoo.getSessionInfo()
     print("Gathering Information, Please Wait!")
-    recordings = zattoo.get_allrecordings(session_info.get("power_guide_hash"))
-    srResult = zattoo.selectRecording(recordings)
-    while srResult == -1:
-        srResult = zattoo.selectRecording(recordings)
-
-    zattoo.downloadSelectedRecording(srResult)
+    proc(session_info, "")
