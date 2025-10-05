@@ -1,6 +1,6 @@
 # Since this is in alpha, please report any bug or suggestions to improve this application
 # Credits: krasny013, sunsettrack4
-# Version 2.0a
+# Version 3.0a
 
 import os
 import subprocess
@@ -265,44 +265,69 @@ class Zattoo:
         self.get_login()
         return self.session_info
     
-    def playlistSelectMenu(self):
-        print("Playlist!")
-        return 1
+    def playlistSelectMenu(self, recordings):
+        while True:
+            os.system('cls' if os.name == "nt" else 'clear')
+            print("\nAvailable recordings:\n")
+            for recording in recordings:
+                if recording['episode'] is not None and recording['episode'] != "":
+                    episode = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
+
+                print(f"{recording['recordingIndex']}. {recording['title']} {episode}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
+
+            try:
+                selectedRecs = input(f"\nFor example: 1,2,3....\nAdd recordings to your list: ")
+                if ("," in selectedRecs and selectedRecs.replace(",", "").isdigit() and all(1 <= int(x) <= len(recordings) for x in selectedRecs.split(","))):
+                    return selectedRecs
+                if "," not in selectedRecs and selectedRecs.isdigit():
+                    if 1 <= int(selectedRecs) <= len(recordings):
+                        selected_recording = recordings[int(selectedRecs) - 1]
+                        return selected_recording
+                    else:
+                        print(f"Invalid input!\nPlease choose a number between 1 and {len(recordings)}.")
+                        time.sleep(2)
+                        continue
+                else:
+                    print(f"Invalid input!\nPlease choose a number between 1 and {len(recordings)}.")
+                    time.sleep(2)
+                    continue
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+                time.sleep(2)
+                continue
     
     def selectRecording(self, recordings, downloadProc):
-        os.system('cls' if os.name == "nt" else 'clear')
-        if "ERR" in downloadProc:
-            if "0" in downloadProc:
-                print("Error: Download wasn't successful\n")
-            if "-2" in downloadProc:
-                print("Error: Requested file isn't available\n")
+        while True:
+            os.system('cls' if os.name == "nt" else 'clear')
+            if "ERR" in downloadProc:
+                if "0" in downloadProc:
+                    print("Error: Download wasn't successful\n")
+                if "-2" in downloadProc:
+                    print("Error: Requested file isn't available\n")
 
-        if not recordings:
-            print("No recordings available to select.")
-            return None
+            if not recordings:
+                print("No recordings available to select.")
+                return None
 
-        print("\nAvailable recordings:\n")
-        for recording in recordings:
-            recEpisode = ""
-            if recording['episode'] is not None and recording['episode'] != "":
-                recEpisode = f"- {recording['episode']} "
+            print("\nAvailable recordings:\n")
+            for recording in recordings:
+                if recording['episode'] is not None and recording['episode'] != "":
+                    episode = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
 
-            print(f"{recording['recordingIndex']}. {recording['title']} {recEpisode}({recording['channel']})")
-
-        try:
-            selected_index = int(input(f"\nWhich recording do you want to download? (1-{len(recordings)})\n"))#Press 'L' to create a downloadlist: "))
-            '''if selected_index == "L" or selected_index == "l":
-                return "L"'''
-            
-            if 1 <= selected_index <= len(recordings):
-                selected_recording = recordings[selected_index - 1]
-                return selected_recording
-            else:
-                print(f"Invalid input!\nPlease choose a number between 1 and {len(recordings)}.")
-                return -2
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-            return -2
+                print(f"{recording['recordingIndex']}. {recording['title']} {episode}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
+            try:
+                selected_index = input(f"\nWhich recording do you want to download? (1-{len(recordings)})\nPress 'L' to create a downloadlist: ")
+                if selected_index == "L" or selected_index == "l":
+                    return "L"
+                elif 1 <= int(selected_index) <= len(recordings):
+                    selected_recording = recordings[int(selected_index) - 1]
+                    return selected_recording
+                else:
+                    print(f"Invalid input!\nPlease choose a number between 1 and {len(recordings)}.")
+                time.sleep(2)
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+                time.sleep(2)
         
     def modifyM3U8(self, input_data, Channel, token, low, domain):
         output = "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n"
@@ -564,7 +589,11 @@ class Zattoo:
                                         file_size_bytes = (bitrate * 1_000_000 * duration) / 8
                                         file_size_mb = file_size_bytes / (1024 * 1024)
                                         firstSize = file_size_mb * 1000000
-                                        
+
+                                        # Scales down if ffprobe gives ridiculous size
+                                        if firstSize > 102400:
+                                            firstSize = firstSize / 100
+
                                         firstSizeActive = 0
                                         
                                     print(f"Progress: {progress_percentage:.2f}% ({os.path.getsize(outputPath) / (1024**2):.2f} MB / {firstSize:.2f} MB (≈ {firstSize / 1024:.1f} GB) | Elapsed: {elapsed_h:02}:{elapsed_m:02}:{elapsed_s:02} | Remaining: {remaining_h:02}:{remaining_m:02}:{remaining_s:02})", end="\r")
@@ -585,11 +614,7 @@ class Zattoo:
 
                     print(f"Progress: 100%   ", end="\r")
                     print("\nDownload completed.")
-
-                    if os.name == "nt":
-                        subprocess.run(['explorer', '/select,', outputPath])
-                    else:
-                        subprocess.run(['open', os.path.dirname(outputPath)])
+                    return outputPath
 
                 elif normalProc == -1:
                     low = 1
@@ -605,6 +630,58 @@ class Zattoo:
                 print(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
+    def proc(session_info, downloadProc):
+        while True:
+            recordings = zattoo.get_allrecordings(session_info.get("power_guide_hash"))
+            srResult = zattoo.selectRecording(recordings, downloadProc)
+
+            if srResult == "L" or srResult == "l":
+                outputPath = None
+                playlistSelected = zattoo.playlistSelectMenu(recordings)
+                #print(f"Selected: {playlistSelected}")
+
+                downloadList = playlistSelected.split(',')
+
+                for index in downloadList:
+                    index = index.strip()
+
+                    if index.isdigit():
+                        recording = None
+                        for rec in recordings:
+                            if rec.get('recordingIndex') == int(index):
+                                recording = rec
+                                break
+
+                        print(f"Next: {index}. {recording.get('title')} - {recording.get('episode')}")
+                        downloadProc = zattoo.downloadSelectedRecording(recording, 0)
+                        if downloadProc in ("OK", "abr"):
+                            downloadProc = "OK"
+                        elif "ERR" in downloadProc:
+                            continue
+                        else:
+                            outputPath = downloadProc
+                    else:
+                        continue
+
+                print("All downloads completed!")
+                if os.name == "nt":
+                    subprocess.run(['explorer', '/select,', outputPath])
+                else:
+                    subprocess.run(['open', os.path.dirname(outputPath)])
+                time.sleep(1)
+                continue
+
+            downloadProc = zattoo.downloadSelectedRecording(srResult, 0)
+            if downloadProc in ("OK", "abr"):
+                downloadProc = "OK"
+            elif "ERR" in downloadProc:
+                continue
+            else:
+                if os.name == "nt":
+                    subprocess.run(['explorer', '/select,', downloadProc])
+                else:
+                    subprocess.run(['open', os.path.dirname(downloadProc)])
+
     os.system('cls' if os.name == "nt" else 'clear')
     parser = argparse.ArgumentParser(description="Zattoo Recording Library Downloader")
     parser.add_argument('--Email', required=False, help="Zattoo Email")
@@ -627,26 +704,6 @@ if __name__ == "__main__":
     if os.path.exists(tmp):
         os.system(f"rmdir /s /q {tmp}" if os.name == "nt" else f"rm -rf {tmp}")
 
-    def proc(session_info, downloadProc):
-        recordings = zattoo.get_allrecordings(session_info.get("power_guide_hash"))
-        srResult = zattoo.selectRecording(recordings, downloadProc)
-        while srResult == -2:
-            '''if srResult == "L":
-                playlistSelected = zattoo.playlistSelectMenu()
-                print(f"Selected: {playlistSelected}")
-                exit()
-                break
-            else:'''
-            srResult = zattoo.selectRecording(recordings, downloadProc)
-        
-        downloadProc = zattoo.downloadSelectedRecording(srResult, 0)
-        if downloadProc == "OK" or downloadProc == "abr":
-            proc(session_info, "OK")
-        elif "ERR" in downloadProc:
-            proc(session_info, downloadProc)
-        else:
-            exit()
-                        
     session_info = zattoo.getSessionInfo()
     print("Gathering Information, Please Wait!")
     proc(session_info, "")
