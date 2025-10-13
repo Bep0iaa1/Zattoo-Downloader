@@ -1,3 +1,8 @@
+<p align="center">
+  <img width="512" height="256" alt="Repository Preview" src="https://github.com/user-attachments/assets/e0ec079f-f547-4a60-8458-c9793df3eac1" />
+</p>
+
+
 # Usage
 zattoo-downloader.py --Email "yourzattooemail" --Password "yourzattoopassword"
 
