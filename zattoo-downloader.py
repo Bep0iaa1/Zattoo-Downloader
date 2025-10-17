@@ -270,10 +270,11 @@ class Zattoo:
             os.system('cls' if os.name == "nt" else 'clear')
             print("\nAvailable recordings:\n")
             for recording in recordings:
+                episodes = ""
                 if recording['episode'] is not None and recording['episode'] != "":
-                    episode = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
+                    episodes = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
 
-                print(f"{recording['recordingIndex']}. {recording['title']} {episode}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
+                print(f"{recording['recordingIndex']}. {recording['title']} {episodes}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
 
             try:
                 selectedRecs = input(f"\nFor example: 1,2,3....\nAdd recordings to your list: ")
@@ -310,11 +311,12 @@ class Zattoo:
                 return None
 
             print("\nAvailable recordings:\n")
+            episodes = ""
             for recording in recordings:
                 if recording['episode'] is not None and recording['episode'] != "":
-                    episode = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
+                    episodes = f"- {recording['episode']} ({recording['serie']}{recording['epis']}) "
 
-                print(f"{recording['recordingIndex']}. {recording['title']} {episode}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
+                print(f"{recording['recordingIndex']}. {recording['title']} {episodes}[{recording['channel']}] ({recording['year']}, {recording['country']}, {''.join(recording['class']).replace(']', '')}, {''.join(recording['genre']).replace('[', '')})")
             try:
                 selected_index = input(f"\nWhich recording do you want to download? (1-{len(recordings)})\nPress 'L' to create a downloadlist: ")
                 if selected_index == "L" or selected_index == "l":
@@ -418,7 +420,6 @@ class Zattoo:
     def downloadSelectedRecording(self, selectedRecording, low):
         global normalProc
         normalProc = 0
-        episode = ""
 
         if selectedRecording:
             params = {
@@ -444,11 +445,12 @@ class Zattoo:
                 else:
                     low = 1
 
+                episodes = ""
                 if selectedRecording['episode'] is not None and selectedRecording['episode'] != "":
-                    episode = f"- {selectedRecording['episode']} ({selectedRecording['serie']}{selectedRecording['epis']}) "
+                    episodes = f"- {selectedRecording['episode']} ({selectedRecording['serie']}{selectedRecording['epis']}) "
 
                 channel = "".join(selectedRecording['channel']).replace("HD", quality)
-                title = f"{selectedRecording['recordingIndex']}. {selectedRecording['title']} {episode}[{channel}] ({selectedRecording['year']}, {selectedRecording['country']}, {''.join(selectedRecording['class']).replace(']', '')}, {''.join(selectedRecording['genre']).replace('[', '')})"
+                title = f"{selectedRecording['recordingIndex']}. {selectedRecording['title']} {episodes}[{channel}] ({selectedRecording['year']}, {selectedRecording['country']}, {''.join(selectedRecording['class']).replace(']', '')}, {''.join(selectedRecording['genre']).replace('[', '')})"
                 
                 title = title.replace('\'', "")
                 title = title.replace("?", "")
@@ -638,7 +640,7 @@ if __name__ == "__main__":
             if srResult == "L" or srResult == "l":
                 outputPath = None
                 playlistSelected = zattoo.playlistSelectMenu(recordings)
-                #print(f"Selected: {playlistSelected}")
+                # print(f"Selected: {playlistSelected}")
 
                 downloadList = playlistSelected.split(',')
 
