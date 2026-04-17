@@ -4,9 +4,10 @@
 
 ## Disclaimer
 
-**WARNING:** This software does not bypass ANY DRM system or security mechanism.
-**No Encouragement of Misuse:** As the developer, I do not encourage or endorse violating Zattoo's Terms of Service.
-**MIT License:** This software is provided "as is" without warranty of any kind.
+This software does not bypass ANY DRM system or security mechanism.<br>As the developer, I do not encourage or endorse violating Zattoo's Terms of Service.<br>
+
+**MIT License:** 
+This software is provided "as is" without warranty of any kind.
 <br>
 ## Usage
 zattoo-downloader.py --Email "yourzattooemail" --Password "yourzattoopassword"
