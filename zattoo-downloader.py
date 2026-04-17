@@ -1,6 +1,6 @@
 # Since this is in alpha, please report any bug or suggestions to improve this application
 # Credits: krasny013, sunsettrack4
-# Version 3.0a
+# Version 4.0a
 
 import os
 import subprocess
@@ -12,7 +12,7 @@ import re
 import threading
 import getpass
 import datetime
-import math
+import json
 import shutil
 import platform
 import zipfile
@@ -20,11 +20,6 @@ import sys
 
 class Zattoo:
     def __init__(self, userData):
-        while 'email' not in userData or not isinstance(userData['email'], str) or len(userData['email'].strip()) == 0 or '@' not in userData['email']:
-            userData['email'] = input("Please enter the email address of your Zattoo account: ").strip()
-        
-        while 'password' not in userData or not isinstance(userData['password'], str) or len(userData['password'].strip()) == 0:
-            userData['password'] = getpass.getpass("Please enter the password of your Zattoo account: ").strip()
 
         self.userData = userData
         self.lang = userData.get('lang', 'en')
@@ -168,6 +163,7 @@ class Zattoo:
             'remember': 'true',
             'format': 'json'
         }
+        
         res = self.session.post(f'https://{self.domain}/zapi/v3/account/login', data=params)
         if not res.json().get('active'):
             raise Exception('login failed')
@@ -263,6 +259,20 @@ class Zattoo:
         self.get_app_token()
         self.get_session()
         self.get_login()
+
+        if self.userData['noConfig'] == 1:
+            os.system('cls' if os.name == "nt" else 'clear')
+
+            if input("Do you want to save the login credentials? (y/n)\n").strip().lower() in ("y", "yes"):
+                os.makedirs("config", exist_ok=True) 
+
+                with open("config/login.conf", "w") as f:
+                    json.dump({
+                        "Email": userData['email'],
+                        "Password": userData['password']
+                    }, f, indent=4)
+            os.system('cls' if os.name == "nt" else 'clear')
+
         return self.session_info
     
     def playlistSelectMenu(self, recordings):
@@ -512,7 +522,6 @@ class Zattoo:
 
                 video_perfs = self.get_video_infs(titlePath)
                 duration = video_perfs.get('duration')
-                bitrate = video_perfs.get('bitrate')
 
                 if not os.path.exists("output"):
                     os.makedirs("output")
@@ -545,7 +554,8 @@ class Zattoo:
                     start_time = time.time()
                     video_duration = f"{hours:02}:{minutes:02}:{seconds:02}"
                     reset = True
-                    firstSizeActive = 1
+
+                    firstBitrate = 0
 
                     while True:
                         line = process.stderr.readline()
@@ -565,40 +575,43 @@ class Zattoo:
                         if not line:
                             break
                         
-                        if "time=" in line:
+                        if "time=" and "bitrate=" in line:
                             time_info = re.search(r'time=(\d+:\d+:\d+\.\d+)', line)
                             
                             if time_info:
                                 current_time = time_info.group(1)
+
                                 try:
+                                    bitrate = video_perfs.get('bitrate')
                                     current_seconds = sum(x * float(t) for x, t in zip([3600, 60, 1], current_time.split(":")))
                                     total_seconds = sum(x * int(t) for x, t in zip([3600, 60, 1], video_duration.split(":")))
-                                    progress_percentage = (current_seconds / total_seconds) * 100
+                                    progress = (current_seconds / total_seconds) * 100
 
-                                    elapsed_seconds = time.time() - start_time
-                                    estimated_total_time = elapsed_seconds / (progress_percentage / 100) if progress_percentage > 0 else 0
-                                    remaining_seconds = max(estimated_total_time - elapsed_seconds, 0)
+                                    sec = time.time() - start_time
+                                    total = sec / (progress / 100) if progress > 0 else 0
+                                    remSec = max(total - sec, 0)
 
-                                    elapsed_h = int(elapsed_seconds // 3600)
-                                    elapsed_m = int((elapsed_seconds % 3600) // 60)
-                                    elapsed_s = int(elapsed_seconds % 60)
+                                    elapsedH = int(sec // 3600)
+                                    elapsedM = int((sec % 3600) // 60)
+                                    elapsedS = int(sec % 60)
 
-                                    remaining_h = int(remaining_seconds // 3600)
-                                    remaining_m = int((remaining_seconds % 3600) // 60)
-                                    remaining_s = int(remaining_seconds % 60)
+                                    remainingH = int(remSec // 3600)
+                                    remainingM = int((remSec % 3600) // 60)
+                                    remainingS = int(remSec % 60)
 
-                                    if firstSizeActive == 1:
-                                        file_size_bytes = (bitrate * 1_000_000 * duration) / 8
-                                        file_size_mb = file_size_bytes / (1024 * 1024)
-                                        firstSize = file_size_mb * 1000000
+                                    if firstBitrate == 0:
+                                        fileBytes = (bitrate * 1_000_000 * duration) / 8
+                                        fileMB = fileBytes / (1024 * 1024)
+                                        expectedSize = fileMB * 1000000
+                                        firstBitrate = 1
 
-                                        # Scales down if ffprobe gives ridiculous size
-                                        if firstSize > 102400:
-                                            firstSize = firstSize / 100
+                                    if (float(line.split("bitrate=")[1].split("kbits")[0].strip()) * duration) / 8 / 1024 > expectedSize:
+                                        expectedSize = (bitrate * duration) / 8 / 1024  # MB
 
-                                        firstSizeActive = 0
+                                    if expectedSize > 102400:
+                                        expectedSize = expectedSize / 100
                                         
-                                    print(f"Progress: {progress_percentage:.2f}% ({os.path.getsize(outputPath) / (1024**2):.2f} MB / {firstSize:.2f} MB (≈ {firstSize / 1024:.1f} GB) | Elapsed: {elapsed_h:02}:{elapsed_m:02}:{elapsed_s:02} | Remaining: {remaining_h:02}:{remaining_m:02}:{remaining_s:02})", end="\r")
+                                    print(f"Progress: {progress:.2f}% ({os.path.getsize(outputPath) / (1024**2):.2f} MB / {expectedSize:.2f} MB (≈ {expectedSize / 1024:.1f} GB) | Elapsed: {elapsedH:02}:{elapsedM:02}:{elapsedS:02} | Remaining: {remainingH:02}:{remainingM:02}:{remainingS:02})", end="\r")
 
                                 except ValueError:
                                     print(f"Error converting time: {current_time}")
@@ -607,16 +620,24 @@ class Zattoo:
                     if low == 1:
                         low = 0
 
-                    # start a separate thread to avoid blocking
-                    progress_thread = threading.Thread(target=track_progress)
-                    progress_thread.start()
+                    try:
+                        # start a separate thread to avoid blocking
+                        progress_thread = threading.Thread(target=track_progress)
+                        progress_thread.daemon = True
+                        progress_thread.start()
 
-                    process.wait()
-                    progress_thread.join()
+                        while process.poll() is None:
+                            time.sleep(0.5)
 
-                    print(f"Progress: 100%   ", end="\r")
-                    print("\nDownload completed.")
-                    return outputPath
+                        print(f"Progress: 100%   ", end="\r")
+                        print("\nDownload completed.")
+                        return outputPath
+                    
+                    except KeyboardInterrupt:
+                        print("\nInterrupted! Stopping...")
+                        process.terminate()
+                        process.wait()
+                        return "OK"
 
                 elif normalProc == -1:
                     low = 1
@@ -684,18 +705,35 @@ if __name__ == "__main__":
                 else:
                     subprocess.run(['open', os.path.dirname(downloadProc)])
 
-    os.system('cls' if os.name == "nt" else 'clear')
     parser = argparse.ArgumentParser(description="Zattoo Recording Library Downloader")
     parser.add_argument('--Email', required=False, help="Zattoo Email")
     parser.add_argument('--Password', required=False, help="Zattoo Password")
 
-    args = parser.parse_args()
-
     userData = {
-        'email': args.Email,
-        'password': args.Password
+        'email': "",
+        'password': "",
+        'noConfig': 1
     }
 
+    os.system('cls' if os.name == "nt" else 'clear')
+    if os.path.exists("config/login.conf"):
+        with open('config/login.conf', 'r') as f:
+            config = json.load(f)
+            userData['email'] = config.get("Email")
+            userData['password'] = config.get("Password")
+            userData["noConfig"] = 0
+    else:    
+        args = parser.parse_args()
+        
+        if args.Email and args.Password:
+            userData['email'] = args.Email
+            userData['password'] = args.Password
+            userData["noConfig"] = 1
+        else:
+            userData['email'] = input("Please enter the email address of your Zattoo account: ").strip()
+            userData['password'] = getpass.getpass("Please enter the password of your Zattoo account: ").strip()
+            userData["noConfig"] = 1
+            
     zattoo = Zattoo(userData)
     if  os.name == 'nt':
         zattoo.checkFFmpegWindows()
