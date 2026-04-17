@@ -5,19 +5,17 @@
 ## Disclaimer
 
 **WARNING:** This software does not bypass ANY DRM system or security mechanism.
-
 **No Encouragement of Misuse:** As the developer, I do not encourage or endorse violating Zattoo's Terms of Service.
-
-**MIT License:** This software is provided "as is" without warranty of any kind. See LICENSE file for full details.
-<br><br>
-# Usage
+**MIT License:** This software is provided "as is" without warranty of any kind.
+<br>
+## Usage
 zattoo-downloader.py --Email "yourzattooemail" --Password "yourzattoopassword"
 
-# Alpha Version
+## Alpha Version
 This project has been tested on macOS (M1) and Windows 10. I can't guarantee 100% functionality, so this project will remain in the alpha stage for a short time.
 
-# Maintenance
+## Maintenance
 This project will be continuously provided with future updates. Feel free to contribute!
 
-# Platform Support
+## Platform Support
 This project is designed to work on Windows, macOS, and Linux.
